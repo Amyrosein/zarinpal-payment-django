@@ -1,6 +1,6 @@
 # by Amir Hossein Taghizadeh
 
-from django.http import HttpResponse
+from django.http import HttpResponse , JsonResponse
 from django.conf import settings
 import requests
 import json
@@ -45,16 +45,16 @@ def send_request(request):
 	try:
 		response = requests.post(
 			ZP_API_REQUEST, data=data, headers=headers, timeout=10)
-
-		if response.status_code == 200:
-			response = response.json()
-			if response['data']['code'] == 100:
-				url = ZP_API_STARTPAY + str(response['data']['authority'])
-				return redirect(url)
-			else:
-				data = json.dumps({'status': False, 'code': str(response['data']['code'])})
-				return HttpResponse(data)
-		return response
+		response = response.json()
+		err = response["errors"]
+		if err:
+			return JsonResponse(err, content_type="application/json",safe=False)
+		if response['data']['code'] == 100:
+			url = ZP_API_STARTPAY + str(response['data']['authority'])
+			return redirect(url)
+		else:
+			return JsonResponse(json.dumps({'status': False, 'code': str(response['data']['code'])}), safe=False)
+		return JsonResponse(response)
 
 	except requests.exceptions.Timeout:
 		data = json.dumps({'status': False, 'code': 'timeout'})
@@ -78,19 +78,15 @@ def verify(request):
 	headers = {'content-type': 'application/json', 'accept': 'application/json'}
 	try:
 		response = requests.post(ZP_API_VERIFY, data=data, headers=headers)
-
-		if response.status_code == 200:
-			response = response.json()
-			if response['data']['code'] == 100:
-				data = json.dumps({'status': True, 'first_time_verify': True, 'ref_id': response['data']['ref_id']})
-			elif response['data']['code'] == 101:
-				data = json.dumps({'status': True, 'first_time_verify': False, 'ref_id': response['data']['ref_id']})
-			else:
-				data = json.dumps({'status': False, 'code': str(response['errors']['code'])})
-			return HttpResponse(data)
 		response = response.json()
-		data = json.dumps({'status': False, 'code': str(response['errors']['code'])})
-		return HttpResponse(data)
+		err = response["errors"]
+		if err:
+			return JsonResponse(err, content_type="application/json",safe=False)
+		if response['data']['code'] == 100:
+			data = json.dumps({'status': True, 'first_time_verify': True, 'ref_id': response['data']['ref_id']})
+		else:
+			data = json.dumps({'status': False, 'data': response})
+		return JsonResponse(data, safe=False)
 
 	except requests.exceptions.ConnectionError:
 		data = json.dumps({'status': False, 'code': 'اتصال برقرار نشد'})
